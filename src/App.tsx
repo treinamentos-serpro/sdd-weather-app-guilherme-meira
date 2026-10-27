@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import CurrentWeather from './components/CurrentWeather';
 import ForecastList from './components/ForecastList';
 import SearchBar from './components/SearchBar';
@@ -6,56 +6,15 @@ import EmptyState from './components/states/EmptyState';
 import ErrorState from './components/states/ErrorState';
 import LoadingState from './components/states/LoadingState';
 import UnitToggle from './components/UnitToggle';
-import { mockWeatherData } from './mocks/weatherData';
-import type { Unit, WeatherData } from './types/weather';
-
-type ContentState =
-  | { status: 'idle' }
-  | { status: 'loading'; query: string }
-  | { status: 'empty'; query: string }
-  | { status: 'error'; query: string; message: string }
-  | { status: 'success'; data: WeatherData };
+import { useWeather } from './hooks/useWeather';
+import type { Unit } from './types/weather';
 
 export default function App() {
   const [unit, setUnit] = useState<Unit>('celsius');
-  const [content, setContent] = useState<ContentState>({ status: 'idle' });
-
-  useEffect(() => {
-    if (content.status !== 'loading') return;
-
-    const { query } = content;
-    const timeoutId = window.setTimeout(() => {
-      try {
-        const isSampleCity =
-          query.toLocaleLowerCase('pt-BR') === mockWeatherData.city.name.toLocaleLowerCase('pt-BR');
-
-        setContent(
-          isSampleCity ? { status: 'success', data: mockWeatherData } : { status: 'empty', query },
-        );
-      } catch {
-        setContent({
-          status: 'error',
-          query,
-          message: `Não foi possível carregar os dados de ${query}.`,
-        });
-      }
-    }, 350);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [content]);
-
-  function handleSearch(query: string) {
-    setContent({ status: 'loading', query });
-  }
-
-  function handleRetry() {
-    if (content.status === 'error') {
-      setContent({ status: 'loading', query: content.query });
-    }
-  }
+  const { status, data, cities, error, query, search, selectCity, retry } = useWeather();
 
   function renderContent() {
-    switch (content.status) {
+    switch (status) {
       case 'idle':
         return (
           <section className="border-y border-white/10 py-12 sm:py-16">
@@ -69,28 +28,63 @@ export default function App() {
           </section>
         );
       case 'loading':
-        return <LoadingState message={`Buscando o clima de ${content.query}...`} />;
+        return <LoadingState message={`Buscando o clima de ${query}...`} />;
       case 'empty':
         return (
           <EmptyState
-            title="Cidade não encontrada"
-            tip={`Não há dados de exemplo para “${content.query}”. Tente São Paulo.`}
+            title="Nenhuma cidade encontrada"
+            tip={`Não encontramos resultados para “${query}”. Confira o nome e tente novamente.`}
           />
         );
       case 'error':
-        return <ErrorState message={content.message} onRetry={handleRetry} />;
+        return (
+          <ErrorState
+            message={error ?? 'Não foi possível carregar os dados meteorológicos.'}
+            onRetry={retry}
+          />
+        );
       case 'success':
+        if (!data) {
+          return (
+            <ErrorState message="Os dados meteorológicos não estão disponíveis." onRetry={retry} />
+          );
+        }
+
         return (
           <div className="space-y-8">
-            {content.data.current ? (
-              <CurrentWeather city={content.data.city} current={content.data.current} unit={unit} />
+            {cities.length > 1 && (
+              <section aria-labelledby="city-results-heading" className="space-y-3">
+                <h2 className="text-lg font-semibold text-white" id="city-results-heading">
+                  Resultados da busca
+                </h2>
+                <ul className="flex flex-wrap gap-2">
+                  {cities.map((city) => (
+                    <li key={city.id}>
+                      <button
+                        aria-pressed={city.id === data.city.id}
+                        className="min-h-11 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-left text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400"
+                        onClick={() => selectCity(city)}
+                        type="button"
+                      >
+                        <span className="block font-medium">{city.name}</span>
+                        <span className="block text-sm text-white/70">
+                          {[city.administrativeArea, city.country].filter(Boolean).join(' · ')}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {data.current ? (
+              <CurrentWeather city={data.city} current={data.current} unit={unit} />
             ) : (
               <EmptyState
                 title="Clima atual indisponível"
                 tip="Os dados atuais desta cidade não estão disponíveis no momento."
               />
             )}
-            <ForecastList forecast={content.data.forecast} unit={unit} />
+            <ForecastList forecast={data.forecast} unit={unit} />
           </div>
         );
     }
@@ -115,7 +109,7 @@ export default function App() {
           </div>
 
           <div className="col-span-2 row-start-2 lg:col-span-1 lg:col-start-2 lg:row-start-1">
-            <SearchBar disabled={content.status === 'loading'} onSearch={handleSearch} />
+            <SearchBar disabled={status === 'loading'} onSearch={search} />
           </div>
         </div>
       </header>
