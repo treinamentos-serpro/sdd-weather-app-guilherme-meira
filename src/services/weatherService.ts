@@ -34,6 +34,14 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
   }
 }
 
+async function parseJson<T>(response: Response): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new WeatherServiceError('A resposta do serviço Open-Meteo é inválida.', response.status);
+  }
+}
+
 interface GeocodingResult {
   id?: number;
   name: string;
@@ -84,6 +92,33 @@ function valueAt(values: unknown, index: number): unknown {
   return Array.isArray(values) ? values[index] : null;
 }
 
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split('-').map(Number);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsedDate.getUTCFullYear() === year &&
+    parsedDate.getUTCMonth() === month - 1 &&
+    parsedDate.getUTCDate() === day
+  );
+}
+
+function dateFromCurrentTime(time: unknown): string | null {
+  if (typeof time !== 'string') return null;
+  const date = time.slice(0, 10);
+  return isIsoDate(date) ? date : null;
+}
+
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1, day + days));
+  const nextYear = String(nextDate.getUTCFullYear()).padStart(4, '0');
+  const nextMonth = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(nextDate.getUTCDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
 export async function searchCities(name: string): Promise<City[]> {
   const normalizedName = name.trim();
   if (!normalizedName) return [];
@@ -98,7 +133,7 @@ export async function searchCities(name: string): Promise<City[]> {
     );
   }
 
-  const data = (await response.json()) as GeocodingResponse;
+  const data = await parseJson<GeocodingResponse>(response);
   const results = Array.isArray(data.results) ? data.results.slice(0, 5) : [];
 
   return results.map((result) => ({
@@ -134,37 +169,58 @@ export async function getWeather(city: City): Promise<WeatherData> {
     );
   }
 
-  const data = (await response.json()) as ForecastResponse | null;
-  if (!data || typeof data !== 'object' || !data.current || !data.daily) {
+  const data = await parseJson<ForecastResponse | null>(response);
+  if (!data || typeof data !== 'object') {
     throw new WeatherServiceError('A resposta do serviço de previsão está incompleta.');
   }
 
-  const dates = Array.isArray(data.daily.time) ? data.daily.time.slice(0, 5) : [];
-  if (dates.length !== 5 || dates.some((date) => typeof date !== 'string')) {
-    throw new WeatherServiceError('A resposta do serviço não contém cinco datas válidas.');
+  const current =
+    data.current && typeof data.current === 'object' && !Array.isArray(data.current)
+      ? data.current
+      : null;
+  const daily =
+    data.daily && typeof data.daily === 'object' && !Array.isArray(data.daily) ? data.daily : null;
+
+  if (!current && !daily) {
+    throw new WeatherServiceError('A resposta do serviço de previsão está incompleta.');
   }
 
-  const current = data.current;
-  const daily = data.daily;
+  const dailyTimes = daily && Array.isArray(daily.time) ? daily.time : [];
+  const currentDate = dateFromCurrentTime(current?.time);
+  const firstDailyDate = dailyTimes.find(isIsoDate);
+  const firstDate = currentDate ?? firstDailyDate ?? null;
+  const forecast =
+    daily && firstDate
+      ? Array.from({ length: 5 }, (_, index) => {
+          const date = addCalendarDays(firstDate, index);
+          const sourceIndex = dailyTimes.indexOf(date);
+
+          return {
+            date,
+            weatherCode: finiteNumber(valueAt(daily.weather_code, sourceIndex)),
+            temperatureMinC: finiteNumber(valueAt(daily.temperature_2m_min, sourceIndex)),
+            temperatureMaxC: finiteNumber(valueAt(daily.temperature_2m_max, sourceIndex)),
+            precipitationProbability: finiteNumber(
+              valueAt(daily.precipitation_probability_max, sourceIndex),
+            ),
+          };
+        })
+      : null;
 
   return {
     city,
     timezone: stringValue(data.timezone) ?? city.timezone,
-    current: {
-      time: stringValue(current.time),
-      temperatureC: finiteNumber(current.temperature_2m),
-      weatherCode: finiteNumber(current.weather_code),
-      relativeHumidity: finiteNumber(current.relative_humidity_2m),
-      windSpeedKmh: finiteNumber(current.wind_speed_10m),
-      precipitationMm: finiteNumber(current.precipitation),
-      pressureHpa: finiteNumber(current.pressure_msl),
-    },
-    forecast: dates.map((date, index) => ({
-      date,
-      weatherCode: finiteNumber(valueAt(daily.weather_code, index)),
-      temperatureMinC: finiteNumber(valueAt(daily.temperature_2m_min, index)),
-      temperatureMaxC: finiteNumber(valueAt(daily.temperature_2m_max, index)),
-      precipitationProbability: finiteNumber(valueAt(daily.precipitation_probability_max, index)),
-    })),
+    current: current
+      ? {
+          time: stringValue(current.time),
+          temperatureC: finiteNumber(current.temperature_2m),
+          weatherCode: finiteNumber(current.weather_code),
+          relativeHumidity: finiteNumber(current.relative_humidity_2m),
+          windSpeedKmh: finiteNumber(current.wind_speed_10m),
+          precipitationMm: finiteNumber(current.precipitation),
+          pressureHpa: finiteNumber(current.pressure_msl),
+        }
+      : null,
+    forecast,
   };
 }
