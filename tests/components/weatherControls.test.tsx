@@ -47,6 +47,8 @@ describe('SearchBar', () => {
     await user.click(screen.getByRole('button', { name: 'Buscar' }));
 
     expect(onSearch).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Digite o nome de uma cidade para buscar.');
+    expect(screen.getByLabelText('Nome da cidade')).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('não chama onSearch quando o input contém apenas espaços', async () => {
@@ -58,6 +60,26 @@ describe('SearchBar', () => {
     await user.click(screen.getByRole('button', { name: 'Buscar' }));
 
     expect(onSearch).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Digite o nome de uma cidade para buscar.');
+  });
+
+  it('limpa o erro ao digitar e expõe o estado disabled como aria-busy', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    const { rerender } = render(<SearchBar onSearch={onSearch} />);
+
+    await user.click(screen.getByRole('button', { name: 'Buscar' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Nome da cidade'), 'Recife');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Nome da cidade')).not.toHaveAttribute('aria-invalid', 'true');
+
+    rerender(<SearchBar onSearch={onSearch} disabled />);
+
+    expect(screen.getByRole('search')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Nome da cidade')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Buscar' })).toBeDisabled();
   });
 
   it('chama onSearch com o termo aparado', async () => {
@@ -85,5 +107,27 @@ describe('UnitToggle e CurrentWeather', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('exibe fallbacks para campos atuais nulos ou não finitos', () => {
+    render(
+      <CurrentWeather
+        city={city}
+        current={{
+          ...current,
+          temperatureC: Number.NaN,
+          weatherCode: null,
+          relativeHumidity: null,
+          windSpeedKmh: Number.NaN,
+          precipitationMm: null,
+          pressureHpa: null,
+        }}
+        unit="celsius"
+      />,
+    );
+
+    expect(screen.getAllByText('Indisponível')).toHaveLength(5);
+    expect(screen.getByText('Condição indisponível')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN|undefined/)).not.toBeInTheDocument();
   });
 });

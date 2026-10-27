@@ -55,4 +55,37 @@ describe('App com dados parciais', () => {
     expect(screen.getByRole('heading', { name: 'Previsão de 5 dias' })).toBeVisible();
     expect(screen.getByText('Previsão indisponível.')).toBeVisible();
   });
+
+  it('marca o conteúdo como ocupado e move o foco ao resultado após loading', () => {
+    const hookActions = {
+      search: vi.fn(),
+      selectCity: vi.fn(),
+      retry: vi.fn(),
+    };
+    useWeatherMock.mockReturnValue({
+      status: 'loading',
+      data: null,
+      cities: [],
+      error: null,
+      query: 'São Paulo',
+      ...hookActions,
+    });
+
+    const { rerender } = render(<App />);
+    const main = screen.getByRole('main', { name: 'Resultado da busca' });
+    expect(main).toHaveAttribute('aria-busy', 'true');
+
+    useWeatherMock.mockReturnValue({
+      status: 'success',
+      data: partialWeather,
+      cities: [city],
+      error: null,
+      query: 'São Paulo',
+      ...hookActions,
+    });
+    rerender(<App />);
+
+    expect(main).toHaveAttribute('aria-busy', 'false');
+    expect(main).toHaveFocus();
+  });
 });

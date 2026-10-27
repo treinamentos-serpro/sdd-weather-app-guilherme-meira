@@ -40,4 +40,25 @@ describe('ForecastList e UnitToggle', () => {
     expect(screen.getByText('212,0 °F')).toBeInTheDocument();
     expect(screen.getByText('32,0 °F')).toBeInTheDocument();
   });
+
+  it('exibe fallback seguro quando campos diários estão ausentes ou não finitos', () => {
+    render(
+      <ForecastList
+        forecast={[
+          {
+            date: '2026-10-27',
+            weatherCode: null,
+            temperatureMinC: null,
+            temperatureMaxC: Number.NaN,
+            precipitationProbability: null,
+          },
+        ]}
+        unit="celsius"
+      />,
+    );
+
+    expect(screen.getAllByText('Indisponível')).toHaveLength(3);
+    expect(screen.getByText('Condição indisponível')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN|undefined/)).not.toBeInTheDocument();
+  });
 });

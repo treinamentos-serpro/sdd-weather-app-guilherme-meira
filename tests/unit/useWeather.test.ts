@@ -111,7 +111,11 @@ describe('useWeather', () => {
   it('retry repete a consulta meteorológica da cidade selecionada', async () => {
     vi.mocked(searchCities).mockResolvedValue([city]);
     vi.mocked(getWeather)
-      .mockRejectedValueOnce(new Error('Falha de rede.'))
+      .mockRejectedValueOnce(
+        new Error(
+          'Não foi possível conectar à Open-Meteo. Verifique sua conexão e tente novamente.',
+        ),
+      )
       .mockResolvedValueOnce(partialWeather);
 
     const { result } = renderHook(() => useWeather());
@@ -121,7 +125,9 @@ describe('useWeather', () => {
     });
 
     expect(result.current.status).toBe('error');
-    expect(result.current.error).toBe('Falha de rede.');
+    expect(result.current.error).toBe(
+      'Não foi possível conectar à Open-Meteo. Verifique sua conexão e tente novamente.',
+    );
 
     await act(async () => {
       await result.current.retry();
@@ -136,7 +142,11 @@ describe('useWeather', () => {
 
   it('retry refaz a mesma busca quando o geocoding falha', async () => {
     vi.mocked(searchCities)
-      .mockRejectedValueOnce(new Error('Falha de rede.'))
+      .mockRejectedValueOnce(
+        new Error(
+          'Não foi possível conectar à Open-Meteo. Verifique sua conexão e tente novamente.',
+        ),
+      )
       .mockResolvedValueOnce([city]);
     vi.mocked(getWeather).mockResolvedValue(partialWeather);
 
@@ -147,7 +157,9 @@ describe('useWeather', () => {
     });
 
     expect(result.current.status).toBe('error');
-    expect(result.current.error).toBe('Falha de rede.');
+    expect(result.current.error).toBe(
+      'Não foi possível conectar à Open-Meteo. Verifique sua conexão e tente novamente.',
+    );
 
     await act(async () => {
       await result.current.retry();

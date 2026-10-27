@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CurrentWeather from './components/CurrentWeather';
 import ForecastList from './components/ForecastList';
 import SearchBar from './components/SearchBar';
@@ -12,6 +12,16 @@ import type { Unit } from './types/weather';
 export default function App() {
   const [unit, setUnit] = useState<Unit>('celsius');
   const { status, data, cities, error, query, search, selectCity, retry } = useWeather();
+  const resultsRef = useRef<HTMLElement | null>(null);
+  const previousStatus = useRef(status);
+
+  useEffect(() => {
+    if (previousStatus.current === 'loading' && status !== 'loading') {
+      resultsRef.current?.focus();
+    }
+
+    previousStatus.current = status;
+  }, [status]);
 
   function renderContent() {
     switch (status) {
@@ -93,7 +103,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-night-900 bg-[radial-gradient(ellipse_at_top,_rgba(109,124,255,0.12),_transparent_55%)] font-sans text-white">
       <header className="border-b border-white/10 bg-night-900/60">
-        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <span aria-hidden="true" className="text-3xl text-sun">
               ☀
@@ -104,17 +114,23 @@ export default function App() {
             </div>
           </div>
 
-          <div className="col-start-2 row-start-1 lg:col-start-3 lg:row-start-1">
+          <div className="col-start-2 row-start-1 lg:col-start-2 lg:row-start-1">
             <UnitToggle unit={unit} onChange={setUnit} />
           </div>
 
-          <div className="col-span-2 row-start-2 lg:col-span-1 lg:col-start-2 lg:row-start-1">
+          <div className="col-span-2 row-start-2 lg:col-start-3 lg:col-span-1 lg:row-start-1">
             <SearchBar disabled={status === 'loading'} onSearch={search} />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <main
+        aria-busy={status === 'loading'}
+        aria-label="Resultado da busca"
+        className="mx-auto max-w-7xl space-y-8 px-4 py-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 sm:px-6 sm:py-10 lg:px-8"
+        ref={resultsRef}
+        tabIndex={-1}
+      >
         {renderContent()}
       </main>
 

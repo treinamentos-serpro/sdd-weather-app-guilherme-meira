@@ -62,6 +62,31 @@ describe('searchCities', () => {
     );
   });
 
+  it('normaliza campos geográficos opcionais e ignora resultados inválidos', async () => {
+    fetchMock.mockResolvedValue(
+      makeResponse({
+        results: [
+          { id: 5, name: null, latitude: 10, longitude: 20 },
+          { id: 6, name: 'Sem coordenadas', latitude: null, longitude: 20 },
+          { name: 'Localidade parcial', latitude: 10.5, longitude: -20.25 },
+          null,
+        ],
+      }),
+    );
+
+    await expect(searchCities('Localidade')).resolves.toEqual([
+      {
+        id: '10.5,-20.25',
+        name: 'Localidade parcial',
+        country: null,
+        administrativeArea: null,
+        latitude: 10.5,
+        longitude: -20.25,
+        timezone: null,
+      },
+    ]);
+  });
+
   it('preserva a ordem recebida e limita os resultados aos cinco primeiros', async () => {
     fetchMock.mockResolvedValue(
       makeResponse({
@@ -114,7 +139,7 @@ describe('searchCities', () => {
 
     await expect(searchCities('São Paulo')).rejects.toMatchObject({
       name: 'WeatherServiceError',
-      message: 'Falha de rede.',
+      message: 'Não foi possível conectar à Open-Meteo. Verifique sua conexão e tente novamente.',
     });
   });
 
@@ -134,7 +159,37 @@ describe('searchCities', () => {
     const pendingRequest = searchCities('São Paulo');
     const expectedError = expect(pendingRequest).rejects.toMatchObject({
       name: 'WeatherServiceError',
-      message: 'A requisição demorou demais.',
+      message: 'A requisição excedeu o limite de 10 segundos. Tente novamente.',
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expectedError;
+  });
+
+  it('mantém o timeout ativo durante a leitura do JSON', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(
+      (_url: RequestInfo | URL, options?: RequestInit) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: vi.fn(
+            () =>
+              new Promise((_resolve, reject) => {
+                options?.signal?.addEventListener('abort', () => {
+                  const abortError = new Error('aborted');
+                  abortError.name = 'AbortError';
+                  reject(abortError);
+                });
+              }),
+          ),
+        }) as unknown as Response,
+    );
+
+    const pendingRequest = searchCities('São Paulo');
+    const expectedError = expect(pendingRequest).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message: 'A requisição excedeu o limite de 10 segundos. Tente novamente.',
     });
     await vi.advanceTimersByTimeAsync(10_000);
 
@@ -230,7 +285,7 @@ describe('getWeather', () => {
 
     await expect(getWeather(city)).rejects.toMatchObject({
       name: 'WeatherServiceError',
-      message: 'A resposta do serviço Open-Meteo é inválida.',
+      message: 'A resposta da Open-Meteo está em formato inválido. Tente novamente.',
     });
   });
 
