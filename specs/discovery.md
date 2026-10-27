@@ -6,6 +6,14 @@ A empresa precisa de uma aplicação para consulta meteorológica. Usuários pod
 
 O briefing inicial não especificava o provedor de dados, a interpretação de “cinco dias”, a unidade inicial, o idioma da interface nem os requisitos de autenticação e persistência. As decisões já tomadas estão registradas ao final deste documento.
 
+## Personas
+
+Personas iniciais baseadas no briefing; objetivos, contextos e métricas são hipóteses a validar com usuários reais.
+
+- **P-01 — Pessoa que planeja o deslocamento:** quer consultar rapidamente o tempo para organizar a rotina. Usa principalmente o celular antes de sair ou durante o trajeto. Considera sucesso encontrar a cidade e entender as condições relevantes em menos de 30 segundos.
+- **P-02 — Pessoa que organiza atividades ao ar livre:** quer comparar os próximos dias para escolher quando realizar uma atividade. Usa celular ou desktop durante o planejamento. Considera sucesso encontrar informação suficiente para decidir o dia.
+- **P-03 — Pessoa que consulta cidades em diferentes regiões:** quer encontrar a localidade correta e interpretar as temperaturas na unidade que prefere. Usa principalmente o celular e, ao planejar uma viagem, também pode usar desktop. Considera sucesso identificar a cidade e entender as temperaturas sem conversão mental.
+
 ## Requisitos Funcionais
 
 - **RF-01 — Buscar cidades:** permitir que o usuário pesquise uma cidade pelo nome.
